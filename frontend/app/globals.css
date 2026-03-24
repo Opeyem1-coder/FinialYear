@@ -1,0 +1,92 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@theme inline {
+  /* Light mode colors - Professional education theme */
+  --color-background: #ffffff;
+  --color-foreground: #1a2a47;
+  --color-card: #f9fbfd;
+  --color-card-foreground: #1a2a47;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a2a47;
+  
+  /* Deep professional blue primary */
+  --color-primary: #1e40af;
+  --color-primary-foreground: #ffffff;
+  
+  /* Emerald secondary for accents */
+  --color-secondary: #10b981;
+  --color-secondary-foreground: #ffffff;
+  
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #6b7280;
+  --color-accent: #10b981;
+  --color-accent-foreground: #ffffff;
+  
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  
+  --color-border: #e5e7eb;
+  --color-input: #f3f4f6;
+  --color-ring: #1e40af;
+  
+  /* Chart colors */
+  --color-chart-1: #1e40af;
+  --color-chart-2: #10b981;
+  --color-chart-3: #f59e0b;
+  --color-chart-4: #8b5cf6;
+  --color-chart-5: #f97316;
+  
+  /* Rounded radius for pill buttons */
+  --radius: 9999px;
+  
+  /* Sidebar colors */
+  --color-sidebar: #f3f4f6;
+  --color-sidebar-foreground: #1a2a47;
+  --color-sidebar-primary: #1e40af;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #10b981;
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: #e5e7eb;
+  --color-sidebar-ring: #1e40af;
+  
+  /* Font families */
+  --font-sans: 'Plus Jakarta Sans', 'Urbanist', system-ui, sans-serif;
+}
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans font-bold tracking-tight;
+  }
+  
+  h1 { @apply text-4xl; }
+  h2 { @apply text-3xl; }
+  h3 { @apply text-2xl; }
+  h4 { @apply text-xl; }
+  h5 { @apply text-lg; }
+  h6 { @apply text-base; }
+}
+
+/* Smooth transitions */
+@layer utilities {
+  .transition-smooth {
+    @apply transition-all duration-200 ease-in-out;
+  }
+  
+  .focus-visible-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+}
