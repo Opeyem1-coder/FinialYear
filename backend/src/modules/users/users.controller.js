@@ -2,15 +2,11 @@ const User = require('./user.model');
 
 // @desc    Get all users
 // @route   GET /api/users
-// @access  Private/Admin
+// @access  Private/Admin|Registry
 exports.getUsers = async (req, res, next) => {
     try {
         const users = await User.find();
-        res.status(200).json({
-            success: true,
-            count: users.length,
-            data: users
-        });
+        res.status(200).json({ success: true, count: users.length, data: users });
     } catch (error) {
         next(error);
     }
@@ -18,19 +14,12 @@ exports.getUsers = async (req, res, next) => {
 
 // @desc    Get single user
 // @route   GET /api/users/:id
-// @access  Private/Admin
+// @access  Private/Admin|Registry
 exports.getUser = async (req, res, next) => {
     try {
         const user = await User.findById(req.params.id);
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: user
-        });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        res.status(200).json({ success: true, data: user });
     } catch (error) {
         next(error);
     }
@@ -38,38 +27,55 @@ exports.getUser = async (req, res, next) => {
 
 // @desc    Create user
 // @route   POST /api/users
-// @access  Private/Admin
+// @access  Private/Admin|Registry
 exports.createUser = async (req, res, next) => {
     try {
         const user = await User.create(req.body);
-
-        res.status(201).json({
-            success: true,
-            data: user
-        });
+        res.status(201).json({ success: true, data: user });
     } catch (error) {
         next(error);
     }
 };
 
-// @desc    Update user
+// @desc    Update user (name, email — NOT password)
 // @route   PUT /api/users/:id
-// @access  Private/Admin
+// @access  Private/Admin|Registry
 exports.updateUser = async (req, res, next) => {
     try {
-        const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+        // Strip password from update — use /set-password route for that
+        const { password, ...safeFields } = req.body;
+
+        const user = await User.findByIdAndUpdate(req.params.id, safeFields, {
             new: true,
             runValidators: true
         });
 
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        res.status(200).json({ success: true, data: user });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Set a user's password (registry sets parent password to student ID after linking)
+// @route   PUT /api/users/:id/set-password
+// @access  Private/Admin|Registry
+exports.setPassword = async (req, res, next) => {
+    try {
+        const { password } = req.body;
+
+        if (!password || password.length < 4) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 4 characters' });
         }
 
-        res.status(200).json({
-            success: true,
-            data: user
-        });
+        const user = await User.findById(req.params.id).select('+password');
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        user.password = password;           // pre-save hook will hash it
+        user.mustChangePassword = true;     // force change on next login
+        await user.save();
+
+        res.status(200).json({ success: true, message: 'Password updated and change required on next login' });
     } catch (error) {
         next(error);
     }
@@ -77,15 +83,11 @@ exports.updateUser = async (req, res, next) => {
 
 // @desc    Delete user
 // @route   DELETE /api/users/:id
-// @access  Private/Admin
+// @access  Private/Admin|Registry
 exports.deleteUser = async (req, res, next) => {
     try {
         await User.findByIdAndDelete(req.params.id);
-
-        res.status(200).json({
-            success: true,
-            data: {}
-        });
+        res.status(200).json({ success: true, data: {} });
     } catch (error) {
         next(error);
     }

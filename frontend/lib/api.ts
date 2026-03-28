@@ -70,7 +70,7 @@ export async function apiFetch(endpoint: string, options: FetchOptions = {}) {
         if (response.status === 401 && typeof window !== 'undefined') {
             // Token expired or invalid
             localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
+            sessionStorage.removeItem('user');
             window.location.href = '/auth/login';
             throw new Error('Unauthorized');
         }

@@ -6,15 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { PillButton } from '@/components/ui/pill-button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Search, Link as LinkIcon, MoreVertical, X } from 'lucide-react'
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog'
+import { Search, Link as LinkIcon, KeyRound } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { toast } from 'sonner'
 
 interface Student {
     _id: string
@@ -31,6 +25,7 @@ interface Parent {
     firstName: string
     lastName: string
     email: string
+    mustChangePassword?: boolean
 }
 
 export default function LinkAccountsPage() {
@@ -42,10 +37,7 @@ export default function LinkAccountsPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
-    // Load students and parents on mount
-    useEffect(() => {
-        loadData()
-    }, [])
+    useEffect(() => { loadData() }, [])
 
     const loadData = async () => {
         setIsLoading(true)
@@ -70,7 +62,7 @@ export default function LinkAccountsPage() {
                 setParents(parentsList)
             }
         } catch (err) {
-            console.error('Failed to load data', err)
+            toast.error('Failed to load data')
         } finally {
             setIsLoading(false)
         }
@@ -83,38 +75,51 @@ export default function LinkAccountsPage() {
 
     const handleToggleParent = (parentId: string) => {
         setSelectedParentIds(prev =>
-            prev.includes(parentId)
-                ? prev.filter(id => id !== parentId)
-                : [...prev, parentId]
+            prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]
         )
     }
 
     const handleSaveLinks = async () => {
         if (!selectedStudent) return
-
         setIsSaving(true)
         try {
+            // 1. Save the parent-student link
             await apiFetch(`/students/${selectedStudent._id}`, {
                 method: 'PUT',
-                body: JSON.stringify({
-                    parentIds: selectedParentIds
-                })
+                body: JSON.stringify({ parentIds: selectedParentIds })
             })
 
-            // Update local state
+            // 2. For each newly linked parent, set their password to the student ID
+            //    and flag mustChangePassword so they're forced to change on first login
+            const previousParentIds = selectedStudent.parentIds?.map((p: any) => p._id || p) || []
+            const newlyLinkedParents = selectedParentIds.filter(id => !previousParentIds.includes(id))
+
+            if (newlyLinkedParents.length > 0) {
+                await Promise.all(
+                    newlyLinkedParents.map(parentId =>
+                        apiFetch(`/users/${parentId}/set-password`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ password: selectedStudent.studentId })
+                        })
+                    )
+                )
+                toast.success(
+                    `Links saved! ${newlyLinkedParents.length} parent(s) can now log in with password: "${selectedStudent.studentId}". They will be asked to change it on first login.`,
+                    { duration: 8000 }
+                )
+            } else {
+                toast.success('Parent links updated successfully!')
+            }
+
+            // 3. Update local state
             setStudents(prev =>
                 prev.map(s =>
-                    s._id === selectedStudent._id
-                        ? { ...s, parentIds: selectedParentIds }
-                        : s
+                    s._id === selectedStudent._id ? { ...s, parentIds: selectedParentIds } : s
                 )
             )
-
             setSelectedStudent(null)
-            alert('Parent links updated successfully!')
-        } catch (err) {
-            console.error('Failed to save links', err)
-            alert('Failed to save parent links. See console for details.')
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to save parent links')
         } finally {
             setIsSaving(false)
         }
@@ -139,7 +144,16 @@ export default function LinkAccountsPage() {
                         <LinkIcon className="h-8 w-8 text-blue-500" />
                         Link Parent Accounts
                     </h1>
-                    <p className="text-muted-foreground mt-1">Connect parents to their children's student accounts.</p>
+                    <p className="text-muted-foreground mt-1">Connect parents to their children. After linking, the parent's login password will be set to the student's ID.</p>
+                </div>
+            </div>
+
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20">
+                <KeyRound className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-700 dark:text-blue-300">
+                    <p className="font-semibold">How parent passwords work</p>
+                    <p className="mt-0.5 text-blue-600 dark:text-blue-400">When you link a parent to a student for the first time, their portal password is automatically set to the <strong>student's ID</strong> (e.g. <code className="bg-blue-100 dark:bg-blue-500/20 px-1 rounded">STU2024001</code>). The parent will be forced to create a new password after their first login.</p>
                 </div>
             </div>
 
@@ -155,11 +169,9 @@ export default function LinkAccountsPage() {
                                 className="pl-9 h-10"
                             />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground border border-border rounded-md px-3 py-1">
-                                Total: <span className="font-bold text-foreground">{filteredStudents.length}</span>
-                            </span>
-                        </div>
+                        <span className="text-sm text-muted-foreground border border-border rounded-md px-3 py-1">
+                            Total: <span className="font-bold text-foreground">{filteredStudents.length}</span>
+                        </span>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -175,40 +187,23 @@ export default function LinkAccountsPage() {
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <div className="h-10 w-10 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center border border-blue-100 dark:border-blue-500/20 flex-shrink-0">
-                                                    <span className="text-blue-500 font-semibold">
-                                                        {`${student.firstName} ${student.lastName}`.charAt(0)}
-                                                    </span>
+                                                    <span className="text-blue-500 font-semibold">{student.firstName.charAt(0)}</span>
                                                 </div>
                                                 <div>
-                                                    <h3 className="font-semibold text-foreground">
-                                                        {student.firstName} {student.lastName}
-                                                    </h3>
-                                                    <p className="text-sm text-muted-foreground">{student.studentId}</p>
+                                                    <h3 className="font-semibold text-foreground">{student.firstName} {student.lastName}</h3>
+                                                    <p className="text-sm text-muted-foreground">{student.studentId} · {student.program} · {student.level}</p>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2 ml-13 text-sm">
-                                                <div>
-                                                    <span className="text-muted-foreground">Program: </span>
-                                                    <span className="text-foreground font-medium">{student.program}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground">Level: </span>
-                                                    <span className="text-foreground font-medium">{student.level}</span>
-                                                </div>
-                                            </div>
+
                                             {student.parentIds && student.parentIds.length > 0 && (
                                                 <div className="mt-2 ml-13">
                                                     <p className="text-xs text-muted-foreground mb-1">Linked Parents:</p>
                                                     <div className="flex flex-wrap gap-1">
                                                         {student.parentIds.map((parentId: any) => (
-                                                            <span
-                                                                key={parentId._id || parentId}
-                                                                className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20"
-                                                            >
-                                                                {typeof parentId === 'object' 
+                                                            <span key={parentId._id || parentId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
+                                                                {typeof parentId === 'object'
                                                                     ? `${parentId.firstName} ${parentId.lastName}`
-                                                                    : getParentName(parentId)
-                                                                }
+                                                                    : getParentName(parentId)}
                                                             </span>
                                                         ))}
                                                     </div>
@@ -218,7 +213,7 @@ export default function LinkAccountsPage() {
 
                                         <Dialog>
                                             <DialogTrigger asChild>
-                                                <PillButton 
+                                                <PillButton
                                                     variant="outline"
                                                     className="flex items-center gap-2 mt-2"
                                                     onClick={() => handleOpenStudent(student)}
@@ -236,10 +231,15 @@ export default function LinkAccountsPage() {
                                                 </DialogHeader>
 
                                                 <div className="space-y-4">
+                                                    <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                                                        <KeyRound className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                                        <span>Newly linked parents will receive <strong>{student.studentId}</strong> as their temporary login password.</span>
+                                                    </div>
+
                                                     <div className="space-y-3 max-h-96 overflow-y-auto">
                                                         {parents.length === 0 ? (
                                                             <p className="text-sm text-muted-foreground text-center py-4">
-                                                                No parents registered. Register parents first in Parent Registry.
+                                                                No parents registered. Register parents first.
                                                             </p>
                                                         ) : (
                                                             parents.map(parent => (
@@ -249,10 +249,7 @@ export default function LinkAccountsPage() {
                                                                         checked={selectedParentIds.includes(parent._id)}
                                                                         onCheckedChange={() => handleToggleParent(parent._id)}
                                                                     />
-                                                                    <label
-                                                                        htmlFor={parent._id}
-                                                                        className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                                                    >
+                                                                    <label htmlFor={parent._id} className="flex-1 cursor-pointer text-sm font-medium">
                                                                         <div className="text-foreground">{parent.firstName} {parent.lastName}</div>
                                                                         <div className="text-xs text-muted-foreground">{parent.email}</div>
                                                                     </label>
@@ -270,7 +267,7 @@ export default function LinkAccountsPage() {
                                                             disabled={isSaving}
                                                             className="bg-blue-500 hover:bg-blue-600 text-white"
                                                         >
-                                                            {isSaving ? 'Saving...' : 'Save Links'}
+                                                            {isSaving ? 'Saving...' : 'Save & Set Password'}
                                                         </PillButton>
                                                     </div>
                                                 </div>

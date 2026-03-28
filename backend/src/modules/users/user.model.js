@@ -37,18 +37,20 @@ const userSchema = new mongoose.Schema(
                 'Please add a valid email',
             ],
         },
+        // Forces a password change on next login (set when parent is linked to student)
+        mustChangePassword: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
 
 // Encrypt password using bcrypt
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) {
-        next();
-    }
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
 
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+  this.password = await bcrypt.hash(this.password, 10);
 });
 
 // Match user entered password to hashed password in database
