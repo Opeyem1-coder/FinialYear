@@ -5,21 +5,12 @@ import { Search, Download, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PillButton } from '@/components/ui/pill-button'
-import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
 
-interface DiscRow {
-    _id: string
-    studentName: string
-    studentId: string
-    teacherName: string
-    incidentType: string
-    description: string
-    actionTaken: string
-    date: string
-}
+interface DiscRow { _id: string; studentName: string; studentId: string; teacherName: string; incidentType: string; description: string; actionTaken: string; date: string }
 
 const SEVERITY: Record<string, string> = {
     'Late': 'bg-amber-100 text-amber-700 border-amber-200',
@@ -27,6 +18,7 @@ const SEVERITY: Record<string, string> = {
     'Cheating': 'bg-red-100 text-red-700 border-red-200',
     'Absence': 'bg-blue-100 text-blue-700 border-blue-200',
     'Disrespect': 'bg-rose-100 text-rose-700 border-rose-200',
+    'Positive Commendation': 'bg-emerald-100 text-emerald-700 border-emerald-200',
 }
 
 export default function AdminDisciplinePage() {
@@ -41,121 +33,102 @@ export default function AdminDisciplinePage() {
         setIsLoading(true)
         try {
             const res = await apiFetch('/discipline')
-            if (res.isMock) {
-                setRecords([
-                    { _id: '1', studentName: 'Liam Johnson', studentId: 'STU2024002', teacherName: 'Dr. Smith', incidentType: 'Late', description: 'Arrived 30 minutes late without notification', actionTaken: 'Verbal warning issued', date: '2024-03-15' },
-                    { _id: '2', studentName: 'Olivia Brown', studentId: 'STU2024003', teacherName: 'Prof. Davis', incidentType: 'Misconduct', description: 'Disrupted class during exam preparation', actionTaken: 'Written warning sent to parent', date: '2024-03-10' },
-                    { _id: '3', studentName: 'Noah Wilson', studentId: 'STU2024004', teacherName: 'Dr. Smith', incidentType: 'Cheating', description: 'Found with unauthorized material during quiz', actionTaken: 'Grade forfeited, parent notified', date: '2024-03-08' },
-                ])
-            } else {
-                setRecords((res.data?.data || []).map((d: any) => ({
-                    _id: d._id,
-                    studentName: d.studentId ? `${d.studentId.firstName} ${d.studentId.lastName}` : 'Unknown',
-                    studentId: d.studentId?.studentId || '—',
-                    teacherName: d.teacherId ? `${d.teacherId.firstName} ${d.teacherId.lastName}` : 'Unknown',
-                    incidentType: d.incidentType,
-                    description: d.description,
-                    actionTaken: d.actionTaken,
-                    date: new Date(d.date).toLocaleDateString()
-                })))
-            }
+            setRecords((res.data?.data || []).map((d: any) => ({
+                _id: d._id,
+                studentName: d.studentId ? `${d.studentId.firstName} ${d.studentId.lastName}` : 'Unknown',
+                studentId: d.studentId?.studentId || '—',
+                teacherName: d.teacherId ? `${d.teacherId.firstName} ${d.teacherId.lastName}` : 'Unknown',
+                incidentType: d.incidentType,
+                description: d.description,
+                actionTaken: d.actionTaken,
+                date: new Date(d.date || d.createdAt).toLocaleDateString()
+            })))
         } catch { toast.error('Failed to load discipline records') }
         finally { setIsLoading(false) }
     }
 
-    const allTypes = Array.from(new Set(records.map(r => r.incidentType)))
-
+    const incidentTypes = [...new Set(records.map(r => r.incidentType))]
     const filtered = records.filter(r => {
-        const matchesSearch = r.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            r.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            r.teacherName.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesSearch = r.studentName.toLowerCase().includes(searchQuery.toLowerCase()) || r.studentId.toLowerCase().includes(searchQuery.toLowerCase()) || r.teacherName.toLowerCase().includes(searchQuery.toLowerCase())
         const matchesType = filterType === 'all' || r.incidentType === filterType
         return matchesSearch && matchesType
     })
 
     const exportCSV = () => {
-        const rows = [
-            ['Student Name', 'Student ID', 'Reported By', 'Incident Type', 'Description', 'Action Taken', 'Date'],
-            ...filtered.map(r => [r.studentName, r.studentId, r.teacherName, r.incidentType, `"${r.description}"`, `"${r.actionTaken}"`, r.date])
-        ]
-        const csv = rows.map(r => r.join(',')).join('\n')
-        const blob = new Blob([csv], { type: 'text/csv' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a'); a.href = url; a.download = 'discipline_report.csv'; a.click()
-        URL.revokeObjectURL(url)
-        toast.success('Discipline records exported as CSV')
+        const csv = [['Student', 'ID', 'Reported By', 'Incident', 'Description', 'Action', 'Date'], ...filtered.map(r => [r.studentName, r.studentId, r.teacherName, r.incidentType, r.description, r.actionTaken, r.date])].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+        const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url; a.download = 'discipline_report.csv'; a.click(); URL.revokeObjectURL(url)
     }
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
                 <div>
                     <h1 className="text-4xl font-heading font-bold text-foreground mb-2">Discipline Records</h1>
-                    <p className="text-muted-foreground">System-wide behavioral incident log across all students</p>
+                    <p className="text-muted-foreground">View all student discipline incidents and commendations</p>
                 </div>
-                <PillButton onClick={exportCSV}><Download className="h-5 w-5 mr-2" />Export CSV</PillButton>
+                <PillButton variant="outline" onClick={exportCSV}><Download className="h-4 w-4 mr-2" />Export CSV</PillButton>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card><CardHeader className="pb-3"><CardDescription>Total Incidents</CardDescription></CardHeader><CardContent><div className="text-3xl font-bold">{filtered.length}</div></CardContent></Card>
-                <Card><CardHeader className="pb-3"><CardDescription>Students Involved</CardDescription></CardHeader><CardContent><div className="text-3xl font-bold text-amber-600">{new Set(filtered.map(r => r.studentId)).size}</div></CardContent></Card>
-                <Card><CardHeader className="pb-3"><CardDescription>Most Common</CardDescription></CardHeader><CardContent>
-                    <div className="text-xl font-bold text-foreground">
-                        {filtered.length > 0
-                            ? Object.entries(filtered.reduce((acc, r) => { acc[r.incidentType] = (acc[r.incidentType] || 0) + 1; return acc }, {} as Record<string, number>)).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
-                            : '—'}
-                    </div>
-                </CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardDescription>Total Records</CardDescription></CardHeader><CardContent><p className="text-4xl font-bold text-foreground">{records.length}</p></CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardDescription>Commendations</CardDescription></CardHeader><CardContent><p className="text-4xl font-bold text-emerald-500">{records.filter(r => r.incidentType === 'Positive Commendation').length}</p></CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardDescription>Incidents</CardDescription></CardHeader><CardContent><p className="text-4xl font-bold text-destructive">{records.filter(r => r.incidentType !== 'Positive Commendation').length}</p></CardContent></Card>
             </div>
 
             <Card>
-                <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-4 top-3 h-5 w-5 text-muted-foreground pointer-events-none" />
-                            <Input placeholder="Search by student, ID, or teacher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <button onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${filterType === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>All</button>
-                            {allTypes.map(t => (
-                                <button key={t} onClick={() => setFilterType(t)} className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${filterType === t ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>{t}</button>
-                            ))}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader><CardTitle>All Incidents</CardTitle><CardDescription>{filtered.length} record{filtered.length !== 1 ? 's' : ''}</CardDescription></CardHeader>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" />All Records</CardTitle>
+                    <CardDescription>{filtered.length} records shown</CardDescription>
+                </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
+                    <div className="flex flex-col md:flex-row gap-4 mb-6">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search student, ID, or teacher..." className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                        </div>
+                        <Select value={filterType} onValueChange={setFilterType}>
+                            <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                {incidentTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {isLoading ? (
+                        <p className="text-center py-8 text-muted-foreground animate-pulse">Loading records...</p>
+                    ) : filtered.length === 0 ? (
+                        <p className="text-center py-8 text-muted-foreground">No records found.</p>
+                    ) : (
                         <Table>
-                            <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Reported By</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead>Action Taken</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Student</TableHead>
+                                    <TableHead>Reported By</TableHead>
+                                    <TableHead>Incident</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Date</TableHead>
+                                </TableRow>
+                            </TableHeader>
                             <TableBody>
-                                {isLoading ? (
-                                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading records...</TableCell></TableRow>
-                                ) : filtered.length > 0 ? filtered.map(r => (
+                                {filtered.map(r => (
                                     <TableRow key={r._id}>
                                         <TableCell>
-                                            <div className="font-medium">{r.studentName}</div>
-                                            <div className="text-xs text-muted-foreground">{r.studentId}</div>
+                                            <p className="font-medium">{r.studentName}</p>
+                                            <p className="text-xs text-muted-foreground font-mono">{r.studentId}</p>
                                         </TableCell>
                                         <TableCell className="text-sm">{r.teacherName}</TableCell>
                                         <TableCell>
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${SEVERITY[r.incidentType] || 'bg-muted text-muted-foreground border-border'}`}>
-                                                <AlertTriangle className="h-3 w-3 mr-1" />{r.incidentType}
-                                            </span>
+                                            <span className={`text-xs px-2 py-1 rounded-full border font-medium ${SEVERITY[r.incidentType] || 'bg-muted text-muted-foreground border-border'}`}>{r.incidentType}</span>
                                         </TableCell>
-                                        <TableCell className="text-sm max-w-xs truncate">{r.description}</TableCell>
-                                        <TableCell className="text-sm max-w-xs truncate text-muted-foreground">{r.actionTaken}</TableCell>
-                                        <TableCell className="text-sm">{r.date}</TableCell>
+                                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{r.description}</TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">{r.date}</TableCell>
                                     </TableRow>
-                                )) : (
-                                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No discipline records found.</TableCell></TableRow>
-                                )}
+                                ))}
                             </TableBody>
                         </Table>
-                    </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

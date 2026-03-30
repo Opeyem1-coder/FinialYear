@@ -2,22 +2,23 @@
 
 import { useState, useEffect } from 'react'
 import { apiFetch } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PillButton } from '@/components/ui/pill-button'
-import { Search, Plus, Edit2, Trash2, Users, Link as LinkIcon } from 'lucide-react'
+import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Search, Plus, Users, Edit2, Trash2, Link as LinkIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
-interface Parent { _id: string; id: string; name: string; firstName: string; lastName: string; email: string; phone: string; students: number; status: string }
+interface Parent { _id: string; id: string; name: string; firstName: string; lastName: string; email: string; status: string }
 
 export default function RegistryParentsPage() {
     const router = useRouter()
     const [searchQuery, setSearchQuery] = useState('')
+    const [parents, setParents] = useState<Parent[]>([])
     const [isRegistering, setIsRegistering] = useState(false)
     const [editingParent, setEditingParent] = useState<Parent | null>(null)
-    const [parents, setParents] = useState<Parent[]>([])
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '' })
     const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '' })
@@ -25,30 +26,24 @@ export default function RegistryParentsPage() {
     const loadParents = async () => {
         try {
             const res = await apiFetch('/users')
-            if (res.isMock) {
-                setParents([
-                    { _id: '1', id: 'PAR001', name: 'Michael Johnson', firstName: 'Michael', lastName: 'Johnson', email: 'michael.j@example.com', phone: '+1 (555) 123-4567', students: 2, status: 'Active' },
-                    { _id: '2', id: 'PAR002', name: 'Sarah Williams', firstName: 'Sarah', lastName: 'Williams', email: 'swilliams@example.com', phone: '+1 (555) 987-6543', students: 1, status: 'Active' },
-                ])
-            } else {
-                const parentsList = res.data.data.filter((u: any) => u.role === 'parent')
-                setParents(parentsList.map((p: any) => ({
-                    _id: p._id, id: p._id.substring(0, 8).toUpperCase(),
-                    name: `${p.firstName} ${p.lastName}`, firstName: p.firstName, lastName: p.lastName,
-                    email: p.email || '', phone: 'N/A', students: 0, status: 'Active'
-                })))
-            }
+            const parentsList = (res.data?.data || []).filter((u: any) => u.role === 'parent')
+            setParents(parentsList.map((p: any) => ({
+                _id: p._id, id: p._id.substring(0, 8).toUpperCase(),
+                name: `${p.firstName} ${p.lastName}`, firstName: p.firstName, lastName: p.lastName,
+                email: p.email || '', status: 'Active'
+            })))
         } catch { toast.error('Failed to load parents') }
     }
 
     useEffect(() => { loadParents() }, [])
 
     const handleRegister = async (e: React.FormEvent) => {
-        e.preventDefault(); setIsSubmitting(true)
+        e.preventDefault()
+        if (!formData.firstName || !formData.lastName || !formData.email) { toast.error('Please fill in all required fields'); return }
+        setIsSubmitting(true)
         try {
-            const res = await apiFetch('/users', { method: 'POST', body: JSON.stringify({ username: formData.email, password: 'TempPass123!', role: 'parent', firstName: formData.firstName, lastName: formData.lastName, email: formData.email }) })
-            if (!res.isMock) { toast.success(`${formData.firstName} ${formData.lastName} registered! Temp password: TempPass123!`) }
-            else { toast.info('Mock mode: parent not saved.') }
+            await apiFetch('/users', { method: 'POST', body: JSON.stringify({ username: formData.email, password: 'TempPass123!', role: 'parent', firstName: formData.firstName, lastName: formData.lastName, email: formData.email }) })
+            toast.success(`${formData.firstName} ${formData.lastName} registered! Temp password: TempPass123!`)
             setIsRegistering(false)
             setFormData({ firstName: '', lastName: '', email: '', phone: '' })
             loadParents()
@@ -58,118 +53,134 @@ export default function RegistryParentsPage() {
 
     const openEdit = (p: Parent) => { setEditingParent(p); setEditForm({ firstName: p.firstName, lastName: p.lastName, email: p.email }) }
 
-    const handleSaveEdit = async () => {
-        if (!editingParent) return; setIsSubmitting(true)
+    const handleEdit = async () => {
+        if (!editingParent) return
+        setIsSubmitting(true)
         try {
-            await apiFetch(`/users/${editingParent._id}`, { method: 'PUT', body: JSON.stringify({ firstName: editForm.firstName, lastName: editForm.lastName, email: editForm.email }) })
-            toast.success('Parent updated successfully')
-            setEditingParent(null); loadParents()
+            await apiFetch(`/users/${editingParent._id}`, { method: 'PUT', body: JSON.stringify({ firstName: editForm.firstName, lastName: editForm.lastName }) })
+            toast.success('Parent updated')
+            setEditingParent(null)
+            loadParents()
         } catch (err: any) { toast.error(err.message || 'Update failed') }
         finally { setIsSubmitting(false) }
     }
 
-    const handleDelete = async (p: Parent) => {
-        if (!confirm(`Delete ${p.name}?`)) return
+    const handleDelete = async (id: string) => {
+        if (!confirm('Remove this parent account?')) return
         try {
-            await apiFetch(`/users/${p._id}`, { method: 'DELETE' })
-            toast.success('Parent deleted'); loadParents()
-        } catch (err: any) { toast.error(err.message || 'Delete failed') }
+            await apiFetch(`/users/${id}`, { method: 'DELETE' })
+            toast.success('Parent removed')
+            setParents(prev => prev.filter(p => p._id !== id))
+        } catch { toast.error('Failed to delete parent') }
     }
 
-    const filtered = parents.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.id.toLowerCase().includes(searchQuery.toLowerCase()) || p.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    const filtered = parents.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.email.toLowerCase().includes(searchQuery.toLowerCase())
+    )
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div><h1 className="text-3xl font-heading font-bold text-foreground">Parent Registry</h1><p className="text-muted-foreground mt-1">Manage parent accounts and family links.</p></div>
-                {!isRegistering && <PillButton onClick={() => setIsRegistering(true)} className="flex items-center gap-2"><Plus className="h-4 w-4" />Register Parent</PillButton>}
+        <div className="space-y-8">
+            <div className="flex items-start justify-between">
+                <div>
+                    <h1 className="text-4xl font-heading font-bold text-foreground mb-2">Parents</h1>
+                    <p className="text-muted-foreground">Register and manage parent accounts</p>
+                </div>
+                <div className="flex gap-3">
+                    <PillButton variant="outline" onClick={() => router.push('/registry/link-accounts')}>
+                        <LinkIcon className="h-4 w-4 mr-2" />Link Accounts
+                    </PillButton>
+                    <PillButton onClick={() => setIsRegistering(true)}><Plus className="h-4 w-4 mr-2" />Add Parent</PillButton>
+                </div>
             </div>
 
-            <Dialog open={!!editingParent} onOpenChange={open => !open && setEditingParent(null)}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Edit Parent</DialogTitle><DialogDescription>Updating details for {editingParent?.name}</DialogDescription></DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2"><label className="text-sm font-medium">First Name</label><Input value={editForm.firstName} onChange={e => setEditForm({ ...editForm, firstName: e.target.value })} /></div>
-                            <div className="space-y-2"><label className="text-sm font-medium">Last Name</label><Input value={editForm.lastName} onChange={e => setEditForm({ ...editForm, lastName: e.target.value })} /></div>
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                        <CardTitle>All Parents <span className="text-muted-foreground text-sm font-normal ml-2">({filtered.length})</span></CardTitle>
+                        <div className="relative w-full md:w-80">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search by name or email..." className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                         </div>
-                        <div className="space-y-2"><label className="text-sm font-medium">Email Address</label><Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
                     </div>
-                    <DialogFooter>
-                        <PillButton variant="outline" onClick={() => setEditingParent(null)}>Cancel</PillButton>
-                        <PillButton onClick={handleSaveEdit} disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Changes'}</PillButton>
-                    </DialogFooter>
+                </CardHeader>
+                <CardContent>
+                    {filtered.length === 0 ? (
+                        <div className="text-center py-16 text-muted-foreground border border-dashed rounded-xl">
+                            <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">No parents found</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filtered.map(p => (
+                                <div key={p._id} className="p-4 rounded-xl border border-border bg-card hover:shadow-sm transition-shadow">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-lg">
+                                                {p.name[0]}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-sm text-foreground">{p.name}</p>
+                                                <p className="text-xs text-muted-foreground">{p.email}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-muted transition-colors"><Edit2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                                            <button onClick={() => handleDelete(p._id)} className="p-1.5 rounded hover:bg-muted transition-colors"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">ID</span><span className="font-mono text-foreground">{p.id}</span></div>
+                                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Status</span><span className="text-emerald-600 dark:text-emerald-400 font-medium">{p.status}</span></div>
+                                    </div>
+                                    <PillButton variant="outline" size="sm" fullWidth className="mt-3" onClick={() => router.push('/registry/link-accounts')}>
+                                        <LinkIcon className="h-3.5 w-3.5 mr-1" />Link to Student
+                                    </PillButton>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Register Dialog */}
+            <Dialog open={isRegistering} onOpenChange={setIsRegistering}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Register New Parent</DialogTitle><DialogDescription>Creates a parent account. Temp password: TempPass123!</DialogDescription></DialogHeader>
+                    <form onSubmit={handleRegister}>
+                        <div className="space-y-4 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2"><Label>First Name <span className="text-destructive">*</span></Label><Input value={formData.firstName} onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))} /></div>
+                                <div className="space-y-2"><Label>Last Name <span className="text-destructive">*</span></Label><Input value={formData.lastName} onChange={e => setFormData(p => ({ ...p, lastName: e.target.value }))} /></div>
+                            </div>
+                            <div className="space-y-2"><Label>Email <span className="text-destructive">*</span></Label><Input type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Phone Number</Label><Input value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} placeholder="+234..." /></div>
+                        </div>
+                        <DialogFooter>
+                            <PillButton type="button" variant="outline" onClick={() => setIsRegistering(false)}>Cancel</PillButton>
+                            <PillButton type="submit" disabled={isSubmitting}>{isSubmitting ? 'Registering...' : 'Register Parent'}</PillButton>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
 
-            {isRegistering ? (
-                <Card className="border-blue-500/20 shadow-md">
-                    <CardHeader className="border-b bg-blue-500/5 pb-6">
-                        <div className="flex items-center justify-between">
-                            <div><CardTitle className="text-xl">Register New Parent</CardTitle><CardDescription className="mt-1">Create a parent account to grant portal access.</CardDescription></div>
-                            <PillButton variant="ghost" onClick={() => setIsRegistering(false)}>Cancel</PillButton>
+            {/* Edit Dialog */}
+            <Dialog open={!!editingParent} onOpenChange={v => !v && setEditingParent(null)}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Edit Parent</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2"><Label>First Name</Label><Input value={editForm.firstName} onChange={e => setEditForm(p => ({ ...p, firstName: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.lastName} onChange={e => setEditForm(p => ({ ...p, lastName: e.target.value }))} /></div>
                         </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <form className="space-y-6" onSubmit={handleRegister}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2"><label className="text-sm font-medium">First Name</label><Input placeholder="Robert" required value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} /></div>
-                                <div className="space-y-2"><label className="text-sm font-medium">Last Name</label><Input placeholder="Taylor" required value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} /></div>
-                                <div className="space-y-2"><label className="text-sm font-medium">Email Address</label><Input type="email" placeholder="robert.t@example.com" required value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></div>
-                                <div className="space-y-2"><label className="text-sm font-medium">Phone (Optional)</label><Input type="tel" placeholder="+1 (555) 000-0000" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /></div>
-                                <div className="space-y-2 md:col-span-2"><label className="text-sm font-medium">Temporary Password</label><Input defaultValue="TempPass123!" readOnly className="bg-muted text-muted-foreground" /><p className="text-xs text-muted-foreground">Parent must change this on first login. Link them to students from the Link Accounts page.</p></div>
-                            </div>
-                            <div className="flex justify-end pt-4 border-t"><PillButton type="submit" disabled={isSubmitting} className="bg-blue-500 hover:bg-blue-600 text-white">{isSubmitting ? 'Creating...' : 'Create Parent Profile'}</PillButton></div>
-                        </form>
-                    </CardContent>
-                </Card>
-            ) : (
-                <Card>
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div className="relative w-full max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search parents..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 h-10" /></div>
-                            <span className="text-sm text-muted-foreground border border-border rounded-md px-3 py-1">Total: <span className="font-bold text-foreground">{filtered.length}</span></span>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-muted text-muted-foreground uppercase text-xs">
-                                    <tr>
-                                        <th className="px-6 py-4 font-semibold">Parent Info</th>
-                                        <th className="px-6 py-4 font-semibold">Contact / Email</th>
-                                        <th className="px-6 py-4 font-semibold">Linked Students</th>
-                                        <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                    {filtered.length > 0 ? filtered.map(p => (
-                                        <tr key={p._id} className="hover:bg-muted/30 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex gap-3">
-                                                    <div className="h-10 w-10 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center border border-blue-100 dark:border-blue-500/20 flex-shrink-0"><span className="text-blue-500 font-semibold">{p.name.charAt(0)}</span></div>
-                                                    <div><div className="font-medium text-foreground">{p.name}</div><div className="text-muted-foreground text-xs mt-0.5">{p.id}</div></div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap"><div className="text-foreground">{p.email}</div><div className="text-muted-foreground text-xs">{p.phone}</div></td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border"><Users className="h-3 w-3 mr-1" />{p.students} Student{p.students !== 1 ? 's' : ''}</span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button onClick={() => router.push('/registry/link-accounts')} className="p-2 text-muted-foreground hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors" title="Link to Students"><LinkIcon className="h-4 w-4" /></button>
-                                                    <button onClick={() => openEdit(p)} className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-md transition-colors" title="Edit"><Edit2 className="h-4 w-4" /></button>
-                                                    <button onClick={() => handleDelete(p)} className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors" title="Delete"><Trash2 className="h-4 w-4" /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )) : <tr><td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">{searchQuery ? `No parents matching "${searchQuery}"` : 'No parents registered yet.'}</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                        <div className="space-y-2"><Label>Email</Label><Input value={editForm.email} disabled /></div>
+                    </div>
+                    <DialogFooter>
+                        <PillButton variant="outline" onClick={() => setEditingParent(null)}>Cancel</PillButton>
+                        <PillButton onClick={handleEdit} disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save'}</PillButton>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

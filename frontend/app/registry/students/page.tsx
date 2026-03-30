@@ -5,298 +5,226 @@ import { apiFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PillButton } from '@/components/ui/pill-button'
-import { Search, Plus, UserCheck, MoreVertical, Edit2, Trash2 } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Search, Plus, GraduationCap, Edit2, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+
+interface Student { id: string; _id: string; name: string; program: string; level: string; status: string; enrolled: string }
+
+const PROGRAMS = ['Computer Science', 'Software Engineering', 'Information Systems', 'Electrical Engineering', 'Mathematics', 'Physics', 'Business Administration']
+const LEVELS = ['100 Level', '200 Level', '300 Level', '400 Level', '500 Level']
 
 export default function RegistryStudentsPage() {
     const [searchQuery, setSearchQuery] = useState('')
+    const [students, setStudents] = useState<Student[]>([])
     const [isRegistering, setIsRegistering] = useState(false)
-
-    const [students, setStudents] = useState<any[]>([])
-    const [formData, setFormData] = useState({
-        firstName: '', lastName: '', email: '', dateOfBirth: '', program: 'Computer Science', level: '100 Level'
-    })
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [editingStudent, setEditingStudent] = useState<Student | null>(null)
+    const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', dateOfBirth: '', program: 'Computer Science', level: '100 Level' })
+    const [editForm, setEditForm] = useState({ program: '', level: '' })
 
     const loadStudents = async () => {
         try {
             const res = await apiFetch('/students')
-            if (res.isMock) {
-                setStudents([
-                    { id: 'STU2024001', name: 'Alaxendra Smith', program: 'Computer Science', level: '100 Level', status: 'Active', enrolled: 'Sept 2024' },
-                    { id: 'STU2024002', name: 'Benjamin Tyler', program: 'Software Engineering', level: '200 Level', status: 'Active', enrolled: 'Sept 2023' },
-                    { id: 'STU2024003', name: 'Chloe Davis', program: 'Information Systems', level: '300 Level', status: 'Suspended', enrolled: 'Sept 2022' },
-                ])
-            } else {
-                setStudents(res.data.data.map((s: any) => ({
-                    id: s.studentId,
-                    name: `${s.firstName} ${s.lastName}`,
-                    program: s.program || 'General',
-                    level: s.level || '100 Level',
-                    status: 'Active',
-                    enrolled: new Date(s.createdAt).toLocaleDateString()
-                })))
-            }
-        } catch (err) {
-            console.error('Failed to load students', err)
-        }
+            setStudents((res.data?.data || []).map((s: any) => ({
+                _id: s._id, id: s.studentId,
+                name: `${s.firstName} ${s.lastName}`,
+                program: s.program || 'General',
+                level: s.level || '100 Level',
+                status: 'Active',
+                enrolled: new Date(s.createdAt).toLocaleDateString()
+            })))
+        } catch { toast.error('Failed to load students') }
     }
 
-    useEffect(() => {
-        loadStudents()
-    }, [])
+    useEffect(() => { loadStudents() }, [])
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!formData.firstName || !formData.lastName || !formData.email) { toast.error('Please fill in all required fields'); return }
+        setIsSubmitting(true)
         try {
-            // First create the actual user account (so they can login)
+            // Create user account
             const userRes = await apiFetch('/users', {
                 method: 'POST',
-                body: JSON.stringify({
-                    username: formData.email, // using email as username
-                    password: 'TempPass123!',
-                    role: 'student',
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    email: formData.email
-                })
+                body: JSON.stringify({ username: formData.email, password: 'TempPass123!', role: 'student', firstName: formData.firstName, lastName: formData.lastName, email: formData.email })
             })
+            const newUserId = userRes.data?.data?._id || userRes.data?._id
 
-            if (!userRes.isMock) {
-                const userId = userRes.data.data._id
-                const studentId = `STU${new Date().getFullYear()}${Math.floor(1000 + Math.random() * 9000)}`
-
-                // Then create the student profile linked to the user account
-                await apiFetch('/students', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        studentId,
-                        userId,
-                        firstName: formData.firstName,
-                        lastName: formData.lastName,
-                        dateOfBirth: formData.dateOfBirth,
-                        program: formData.program,
-                        level: formData.level
-                    })
-                })
-            }
-
+            // Create student profile linked to user
+            await apiFetch('/students', {
+                method: 'POST',
+                body: JSON.stringify({ userId: newUserId, firstName: formData.firstName, lastName: formData.lastName, program: formData.program, level: formData.level, dateOfBirth: formData.dateOfBirth })
+            })
+            toast.success(`${formData.firstName} ${formData.lastName} registered! Temp password: TempPass123!`)
             setIsRegistering(false)
             setFormData({ firstName: '', lastName: '', email: '', dateOfBirth: '', program: 'Computer Science', level: '100 Level' })
-            loadStudents() // Refresh table
-        } catch (err) {
-            console.error('Registration failed', err)
-            alert('Failed to register student. See console for details.')
-        }
-    }
-
-    const handleDelete = async (studentId: string, studentName: string) => {
-        if (!confirm(`Are you sure you want to delete ${studentName}?`)) return
-
-        try {
-            await apiFetch(`/students/${studentId}`, {
-                method: 'DELETE'
-            })
             loadStudents()
-            alert('Student deleted successfully')
-        } catch (err) {
-            console.error('Delete failed', err)
-            alert('Failed to delete student')
-        }
+        } catch (err: any) { toast.error(err.message || 'Registration failed') }
+        finally { setIsSubmitting(false) }
     }
 
-    const handleMoreOptions = (studentId: string, studentName: string) => {
-        alert(`More options menu for: ${studentName}`)
-        console.log('Show more options for:', studentId)
+    const openEdit = (s: Student) => { setEditingStudent(s); setEditForm({ program: s.program, level: s.level }) }
+
+    const handleEdit = async () => {
+        if (!editingStudent) return
+        setIsSubmitting(true)
+        try {
+            await apiFetch(`/students/${editingStudent._id}`, { method: 'PUT', body: JSON.stringify(editForm) })
+            toast.success('Student updated')
+            setEditingStudent(null)
+            loadStudents()
+        } catch (err: any) { toast.error(err.message || 'Update failed') }
+        finally { setIsSubmitting(false) }
     }
 
-    const filteredStudents = students.filter(student =>
-        student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.program.toLowerCase().includes(searchQuery.toLowerCase())
+    const handleDelete = async (id: string) => {
+        if (!confirm('Delete this student record?')) return
+        try {
+            await apiFetch(`/students/${id}`, { method: 'DELETE' })
+            toast.success('Student deleted')
+            setStudents(prev => prev.filter(s => s._id !== id))
+        } catch { toast.error('Failed to delete student') }
+    }
+
+    const filtered = students.filter(s =>
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.program.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-8">
+            <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-3xl font-heading font-bold text-foreground">Student Registry</h1>
-                    <p className="text-muted-foreground mt-1">Manage and register student accounts.</p>
+                    <h1 className="text-4xl font-heading font-bold text-foreground mb-2">Students</h1>
+                    <p className="text-muted-foreground">Register and manage student accounts</p>
                 </div>
-                {!isRegistering && (
-                    <PillButton onClick={() => setIsRegistering(true)} className="flex items-center gap-2">
-                        <Plus className="h-4 w-4" />
-                        Register Student
-                    </PillButton>
-                )}
+                <PillButton onClick={() => setIsRegistering(true)}><Plus className="h-4 w-4 mr-2" />Register Student</PillButton>
             </div>
 
-            {isRegistering ? (
-                <Card className="border-emerald-500/20 shadow-md">
-                    <CardHeader className="border-b bg-emerald-500/5 pb-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-xl">Register New Student</CardTitle>
-                                <CardDescription className="mt-1">Add a new student profile to the university registry.</CardDescription>
-                            </div>
-                            <PillButton variant="ghost" onClick={() => setIsRegistering(false)}>Cancel</PillButton>
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                        <CardTitle>All Students <span className="text-muted-foreground text-sm font-normal ml-2">({filtered.length})</span></CardTitle>
+                        <div className="relative w-full md:w-80">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search by name, ID, or program..." className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                         </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <form className="space-y-6" onSubmit={handleRegister}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">First Name</label>
-                                    <Input placeholder="e.g. John" required value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} />
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {filtered.length === 0 ? (
+                        <div className="text-center py-16 text-muted-foreground border border-dashed rounded-xl">
+                            <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">No students found</p>
+                            <p className="text-sm mt-1">Register a new student to get started.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filtered.map(s => (
+                                <div key={s._id} className="p-4 rounded-xl border border-border bg-card hover:shadow-sm transition-shadow">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg">
+                                                {s.name[0]}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-sm text-foreground">{s.name}</p>
+                                                <p className="text-xs text-muted-foreground font-mono">{s.id}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-muted transition-colors"><Edit2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                                            <button onClick={() => handleDelete(s._id)} className="p-1.5 rounded hover:bg-muted transition-colors"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground">Program</span>
+                                            <span className="font-medium text-foreground truncate ml-2 max-w-[150px]">{s.program}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground">Level</span>
+                                            <span className="font-medium text-foreground">{s.level}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground">Enrolled</span>
+                                            <span className="text-muted-foreground">{s.enrolled}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Last Name</label>
-                                    <Input placeholder="e.g. Doe" required value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} />
-                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Email Address</label>
-                                    <Input type="email" placeholder="john.doe@university.edu" required value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Date of Birth</label>
-                                    <Input type="date" required value={formData.dateOfBirth} onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })} />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Program / Major</label>
-                                    <select required value={formData.program} onChange={e => setFormData({ ...formData, program: e.target.value })} className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50">
-                                        <option>Computer Science</option>
-                                        <option>Software Engineering</option>
-                                        <option>Information Systems</option>
-                                        <option>Cybersecurity</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Current Level</label>
-                                    <select required value={formData.level} onChange={e => setFormData({ ...formData, level: e.target.value })} className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50">
-                                        <option>100 Level</option>
-                                        <option>200 Level</option>
-                                        <option>300 Level</option>
-                                        <option>400 Level</option>
-                                    </select>
-                                </div>
-
-                                <div className="space-y-2 md:col-span-2">
-                                    <label className="text-sm font-medium">Temporary Password</label>
-                                    <Input type="text" defaultValue="TempPass123!" readOnly className="bg-muted text-muted-foreground" />
-                                    <p className="text-xs text-muted-foreground">This password will be sent to the student. They must change it upon first login.</p>
-                                </div>
+            {/* Register Dialog */}
+            <Dialog open={isRegistering} onOpenChange={setIsRegistering}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader><DialogTitle>Register New Student</DialogTitle><DialogDescription>Creates a user account and student profile. Temp password: TempPass123!</DialogDescription></DialogHeader>
+                    <form onSubmit={handleRegister}>
+                        <div className="space-y-4 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2"><Label>First Name <span className="text-destructive">*</span></Label><Input value={formData.firstName} onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))} /></div>
+                                <div className="space-y-2"><Label>Last Name <span className="text-destructive">*</span></Label><Input value={formData.lastName} onChange={e => setFormData(p => ({ ...p, lastName: e.target.value }))} /></div>
                             </div>
-
-                            <div className="flex justify-end pt-4 border-t">
-                                <PillButton type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white">
-                                    Create Student Profile
-                                </PillButton>
-                            </div>
-                        </form>
-                    </CardContent>
-                </Card>
-            ) : (
-                <Card>
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div className="relative w-full max-w-sm">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search students by name, ID, or program..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-9 h-10"
-                                />
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground border border-border rounded-md px-3 py-1">
-                                    Total Active: <span className="font-bold text-foreground">{filteredStudents.length}</span>
-                                </span>
+                            <div className="space-y-2"><Label>Email Address <span className="text-destructive">*</span></Label><Input type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Date of Birth</Label><Input type="date" value={formData.dateOfBirth} onChange={e => setFormData(p => ({ ...p, dateOfBirth: e.target.value }))} /></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Program</Label>
+                                    <Select value={formData.program} onValueChange={v => setFormData(p => ({ ...p, program: v }))}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>{PROGRAMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Level</Label>
+                                    <Select value={formData.level} onValueChange={v => setFormData(p => ({ ...p, level: v }))}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-muted text-muted-foreground uppercase text-xs">
-                                    <tr>
-                                        <th className="px-6 py-4 font-semibold rounded-tl-md">Student Info</th>
-                                        <th className="px-6 py-4 font-semibold">Program</th>
-                                        <th className="px-6 py-4 font-semibold">Status</th>
-                                        <th className="px-6 py-4 font-semibold text-right rounded-tr-md">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                    {filteredStudents.length > 0 ? (
-                                        filteredStudents.map((student) => (
-                                            <tr key={student.id} className="hover:bg-muted/30 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex gap-3">
-                                                        <div className="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center border border-emerald-100 dark:border-emerald-500/20 flex-shrink-0">
-                                                            <span className="text-emerald-500 font-semibold">{student.name.charAt(0)}</span>
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-medium text-foreground">{student.name}</div>
-                                                            <div className="text-muted-foreground text-xs mt-0.5">{student.id}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-foreground">{student.program}</div>
-                                                    <div className="text-muted-foreground text-xs">{student.level}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    {student.status === 'Active' ? (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-                                                            <UserCheck className="h-3 w-3 mr-1" />
-                                                            Active
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
-                                                            Suspended
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button 
-                                                            onClick={() => alert('Edit functionality - form update would go here')}
-                                                            className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-md transition-colors"
-                                                            title="Edit student"
-                                                        >
-                                                            <Edit2 className="h-4 w-4" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleDelete(student.id, student.name)}
-                                                            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                                                            title="Delete student"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleMoreOptions(student.id, student.name)}
-                                                            className="p-2 text-muted-foreground hover:bg-muted rounded-md transition-colors"
-                                                            title="More options"
-                                                        >
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
-                                                No students found matching "{searchQuery}"
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                        <DialogFooter>
+                            <PillButton type="button" variant="outline" onClick={() => setIsRegistering(false)}>Cancel</PillButton>
+                            <PillButton type="submit" disabled={isSubmitting}>{isSubmitting ? 'Registering...' : 'Register Student'}</PillButton>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Dialog */}
+            <Dialog open={!!editingStudent} onOpenChange={v => !v && setEditingStudent(null)}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Edit Student</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Program</Label>
+                            <Select value={editForm.program} onValueChange={v => setEditForm(p => ({ ...p, program: v }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>{PROGRAMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                            </Select>
                         </div>
-                    </CardContent>
-                </Card>
-            )}
+                        <div className="space-y-2">
+                            <Label>Level</Label>
+                            <Select value={editForm.level} onValueChange={v => setEditForm(p => ({ ...p, level: v }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <PillButton variant="outline" onClick={() => setEditingStudent(null)}>Cancel</PillButton>
+                        <PillButton onClick={handleEdit} disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save'}</PillButton>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

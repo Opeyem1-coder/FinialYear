@@ -47,7 +47,7 @@ export default function LinkAccountsPage() {
                 apiFetch('/users')
             ])
 
-            if (studentsRes.isMock) {
+            if (false) {
                 setStudents([
                     { _id: '1', studentId: 'STU2024001', firstName: 'Alexandra', lastName: 'Smith', program: 'Computer Science', level: '100 Level', parentIds: [] },
                     { _id: '2', studentId: 'STU2024002', firstName: 'Benjamin', lastName: 'Tyler', program: 'Software Engineering', level: '200 Level', parentIds: [] },

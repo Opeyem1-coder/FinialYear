@@ -65,7 +65,7 @@ router.use(protect);
  */
 router
     .route('/')
-    .get(authorize('admin', 'teacher', 'registry'), getCourses)
+    .get(authorize('admin', 'teacher', 'registry', 'student'), getCourses)
     .post(authorize('admin'), createCourse);
 
 /**

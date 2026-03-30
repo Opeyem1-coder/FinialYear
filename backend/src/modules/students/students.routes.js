@@ -13,18 +13,18 @@ const router = express.Router();
 
 router.use(protect);
 
-// GET — admin, teacher, registry, AND parent can read students
+// GET — admin, teacher, registry, parent, AND student can read students
 // POST — only admin and registry can create students
 router
     .route('/')
-    .get(authorize('admin', 'teacher', 'registry', 'parent'), getStudents)
+    .get(authorize('admin', 'teacher', 'registry', 'parent', 'student'), getStudents)
     .post(authorize('admin', 'registry'), createStudent);
 
-// GET single — admin, teacher, registry, AND parent (controller enforces parent can only see their own child)
+// GET single — admin, teacher, registry, parent, AND student 
 // PUT / DELETE — only admin and registry
 router
     .route('/:id')
-    .get(authorize('admin', 'teacher', 'registry', 'parent'), getStudent)
+    .get(authorize('admin', 'teacher', 'registry', 'parent', 'student'), getStudent)
     .put(authorize('admin', 'registry'), updateStudent)
     .delete(authorize('admin', 'registry'), deleteStudent);
 

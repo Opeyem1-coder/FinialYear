@@ -7,7 +7,6 @@ import { Mail, Lock, ArrowRight } from 'lucide-react'
 import { PillButton } from '@/components/ui/pill-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { apiFetch } from '@/lib/api'
 
 export default function LoginPage() {
@@ -35,37 +34,16 @@ export default function LoginPage() {
         requireAuth: false
       })
 
-      // Mock mode fallback
-      if (res.isMock) {
-        let role = 'parent'
-        if (email.includes('admin')) role = 'admin'
-        else if (email.includes('teacher') || email.includes('lecturer')) role = 'teacher'
-        else if (email.includes('student')) role = 'student'
-        else if (email.includes('registry')) role = 'registry'
-
-        sessionStorage.setItem('user', JSON.stringify({ email, role, name: email.split('@')[0] }))
-
-        if (role === 'admin') router.push('/admin/dashboard')
-        else if (role === 'teacher') router.push('/teacher/dashboard')
-        else if (role === 'student') router.push('/student/dashboard')
-        else if (role === 'registry') router.push('/registry/dashboard')
-        else router.push('/parent/dashboard')
-        return
-      }
-
       const { token, user, mustChangePassword } = res.data
 
-      // Store token and user data
       localStorage.setItem('authToken', token)
       sessionStorage.setItem('user', JSON.stringify(user))
 
-      // If forced password change — redirect to change-password page before dashboard
       if (mustChangePassword) {
         router.push('/auth/change-password')
         return
       }
 
-      // Normal routing based on role
       if (user.role === 'admin') router.push('/admin/dashboard')
       else if (user.role === 'teacher') router.push('/teacher/dashboard')
       else if (user.role === 'student') router.push('/student/dashboard')
@@ -135,15 +113,7 @@ export default function LoginPage() {
               <Label htmlFor="email">Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@university.edu"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="pl-10"
-                  required
-                />
+                <Input id="email" type="email" placeholder="you@university.edu" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" required />
               </div>
             </div>
 
@@ -151,15 +121,7 @@ export default function LoginPage() {
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Your password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="pl-10"
-                  required
-                />
+                <Input id="password" type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} className="pl-10" required />
               </div>
               <p className="text-xs text-muted-foreground">
                 First-time parent? Use your child's <strong>Student ID</strong> as your password.

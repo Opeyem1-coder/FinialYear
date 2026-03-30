@@ -3,51 +3,28 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle, XCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { apiFetch } from '@/lib/api'
 
-interface CourseAttendance {
-    code: string
-    title: string
-    totalClasses: number
-    attended: number
-    percentage: number
-}
+interface CourseAttendance { code: string; title: string; totalClasses: number; attended: number; percentage: number }
 
 export default function StudentAttendancePage() {
     const [attendanceData, setAttendanceData] = useState<CourseAttendance[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState('')
     const [overallAttendance, setOverallAttendance] = useState(0)
 
     useEffect(() => {
         let mounted = true
         const load = async () => {
             try {
-                const isMock = localStorage.getItem('useMockData') === 'true'
-                if (isMock) {
-                    const mockData = [
-                        { code: 'CSC 301', title: 'Data Structures', totalClasses: 24, attended: 22, percentage: 91 },
-                        { code: 'CSC 305', title: 'Operating Systems', totalClasses: 20, attended: 19, percentage: 95 },
-                        { code: 'MTH 201', title: 'Linear Algebra', totalClasses: 28, attended: 20, percentage: 71 },
-                        { code: 'PHY 203', title: 'General Physics III', totalClasses: 18, attended: 17, percentage: 94 },
-                        { code: 'GST 201', title: 'Communication Skills', totalClasses: 12, attended: 12, percentage: 100 },
-                    ]
-                    if (mounted) {
-                        setAttendanceData(mockData)
-                        setOverallAttendance(Math.round(mockData.reduce((acc, c) => acc + c.percentage, 0) / mockData.length))
-                        setIsLoading(false)
-                    }
-                    return
-                }
-
                 const uStr = sessionStorage.getItem('user')
                 if (!uStr) { setIsLoading(false); return }
                 const user = JSON.parse(uStr)
                 const myId = user._id || user.id
 
                 const studentRes = await apiFetch('/students')
-                if (studentRes.isMock || !studentRes.data?.data?.length) { setIsLoading(false); return }
-                const profile = studentRes.data.data.find((s: any) => s.userId === myId) || studentRes.data.data[0]
+                if (!studentRes.data?.data?.length) { setIsLoading(false); return }
+                const profile = studentRes.data.data.find((s: any) => s.userId === myId || s.userId?._id === myId) || studentRes.data.data[0]
                 if (!profile) { setIsLoading(false); return }
 
                 const [attRes, coursesRes] = await Promise.all([
@@ -55,44 +32,39 @@ export default function StudentAttendancePage() {
                     apiFetch('/courses')
                 ])
 
-                if (!attRes.isMock) {
-                    const allAtt: any[] = attRes.data.data || []
-                    const allCourses: any[] = coursesRes.data?.data || []
+                const allAtt: any[] = attRes.data?.data || []
+                const allCourses: any[] = coursesRes.data?.data || []
 
-                    if (allAtt.length === 0) {
-                        if (mounted) { setAttendanceData([]); setOverallAttendance(0); setIsLoading(false) }
-                        return
-                    }
-
-                    const totalPresent = allAtt.filter((a: any) => a.status === 'present').length
-                    const overallPct = Math.round((totalPresent / allAtt.length) * 100)
-
-                    const courseStats: CourseAttendance[] = allCourses.length > 0
-                        ? allCourses.map((c: any, idx: number) => {
-                            const slice = Math.max(1, Math.floor(allAtt.length / allCourses.length))
-                            const start = idx * slice
-                            const end = idx === allCourses.length - 1 ? allAtt.length : start + slice
-                            const sliceAtt = allAtt.slice(start, end)
-                            const present = sliceAtt.filter((a: any) => a.status === 'present').length
-                            const pct = sliceAtt.length > 0 ? Math.round((present / sliceAtt.length) * 100) : overallPct
-                            const parts = (c.courseName || '').split('—')
-                            return {
-                                code: parts[0]?.trim() || c.courseName,
-                                title: parts[1]?.trim() || c.subject || c.courseName,
-                                totalClasses: sliceAtt.length,
-                                attended: present,
-                                percentage: pct
-                            }
-                        })
-                        : [{ code: 'OVERALL', title: 'All Courses', totalClasses: allAtt.length, attended: totalPresent, percentage: overallPct }]
-
-                    if (mounted) { setAttendanceData(courseStats); setOverallAttendance(overallPct) }
+                if (allAtt.length === 0) {
+                    if (mounted) { setAttendanceData([]); setOverallAttendance(0); setIsLoading(false) }
+                    return
                 }
 
-                if (mounted) setIsLoading(false)
-            } catch (err) {
-                console.error(err)
-                if (mounted) setIsLoading(false)
+                const totalPresent = allAtt.filter((a: any) => a.status === 'present').length
+                const overallPct = Math.round((totalPresent / allAtt.length) * 100)
+
+                const courseStats: CourseAttendance[] = allCourses.length > 0
+                    ? allCourses.map((c: any, idx: number) => {
+                        const slice = Math.max(1, Math.floor(allAtt.length / allCourses.length))
+                        const start = idx * slice
+                        const end = idx === allCourses.length - 1 ? allAtt.length : start + slice
+                        const sliceAtt = allAtt.slice(start, end)
+                        const present = sliceAtt.filter((a: any) => a.status === 'present').length
+                        const pct = sliceAtt.length > 0 ? Math.round((present / sliceAtt.length) * 100) : overallPct
+                        const parts = (c.courseName || '').split('—')
+                        return {
+                            code: parts[0]?.trim() || c.courseName,
+                            title: parts[1]?.trim() || c.subject || c.courseName,
+                            totalClasses: sliceAtt.length,
+                            attended: present,
+                            percentage: pct
+                        }
+                    })
+                    : [{ code: 'OVERALL', title: 'All Courses', totalClasses: allAtt.length, attended: totalPresent, percentage: overallPct }]
+
+                if (mounted) { setAttendanceData(courseStats); setOverallAttendance(overallPct); setIsLoading(false) }
+            } catch (err: any) {
+                if (mounted) { setError(err.message || 'Failed to load attendance'); setIsLoading(false) }
             }
         }
         load()
@@ -107,6 +79,7 @@ export default function StudentAttendancePage() {
     }
 
     if (isLoading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Loading attendance...</div>
+    if (error) return <div className="p-8 text-center text-destructive">{error}</div>
 
     const overallColor = getColor(overallAttendance)
 
@@ -118,61 +91,84 @@ export default function StudentAttendancePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="md:col-span-1">
-                    <CardHeader><CardTitle>Overall Attendance</CardTitle><CardDescription>Current Semester</CardDescription></CardHeader>
-                    <CardContent className="flex flex-col items-center justify-center p-6">
-                        <div className="relative w-40 h-40 flex items-center justify-center">
-                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                                <circle className="text-muted stroke-current" strokeWidth="8" cx="50" cy="50" r="40" fill="transparent" />
-                                <circle className={`${overallColor.stroke} stroke-current`} strokeWidth="8" strokeLinecap="round" cx="50" cy="50" r="40" fill="transparent" strokeDasharray={`${overallAttendance * 2.51} 251.2`} />
+                <Card className="md:col-span-1 border-2 border-primary/20">
+                    <CardHeader><CardTitle className="text-lg">Overall Attendance</CardTitle></CardHeader>
+                    <CardContent className="flex flex-col items-center justify-center py-4">
+                        <div className="relative w-32 h-32">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <circle className="stroke-muted fill-none" strokeWidth="3" cx="18" cy="18" r="15.9" />
+                                <circle className={`fill-none ${overallColor.stroke} stroke-current`} strokeWidth="3" strokeDasharray={`${overallAttendance}, 100`} strokeLinecap="round" cx="18" cy="18" r="15.9" />
                             </svg>
-                            <div className="absolute flex flex-col items-center justify-center">
-                                <span className="text-4xl font-bold">{overallAttendance}%</span>
-                                <span className="text-xs text-muted-foreground mt-1">Present</span>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-3xl font-bold text-foreground">{overallAttendance}%</span>
+                                <span className="text-xs text-muted-foreground">Overall</span>
                             </div>
                         </div>
-                        {overallAttendance >= 75
-                            ? <Badge variant="success" className="mt-6 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Minimum met</Badge>
-                            : <Badge variant="destructive" className="mt-6 flex items-center gap-1"><XCircle className="w-3 h-3" /> Below minimum</Badge>
-                        }
-                        {attendanceData.length === 0 && <p className="text-xs text-muted-foreground mt-4 text-center">No attendance records yet.</p>}
+                        <p className={`mt-4 px-3 py-1 rounded-full text-sm font-semibold ${overallColor.text}`}>
+                            {overallAttendance >= 75 ? 'Good Standing' : overallAttendance >= 60 ? 'Warning' : 'Critical'}
+                        </p>
                     </CardContent>
                 </Card>
 
                 <Card className="md:col-span-2">
-                    <CardHeader><CardTitle>Attendance by Course</CardTitle><CardDescription>75% minimum attendance required for exams</CardDescription></CardHeader>
-                    <CardContent>
-                        {attendanceData.length === 0 ? (
-                            <div className="py-8 text-center text-muted-foreground border border-dashed rounded-lg">
-                                No attendance records found yet. Records will appear once your lecturers mark attendance.
+                    <CardHeader>
+                        <CardTitle>Summary</CardTitle>
+                        <CardDescription>Attendance breakdown across courses</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {[
+                            { label: 'Courses Tracked', value: attendanceData.length.toString() },
+                            { label: 'Total Sessions', value: attendanceData.reduce((a, c) => a + c.totalClasses, 0).toString() },
+                            { label: 'Sessions Attended', value: attendanceData.reduce((a, c) => a + c.attended, 0).toString() },
+                            { label: 'Minimum Required', value: '75%' },
+                        ].map(item => (
+                            <div key={item.label} className="flex justify-between py-2 border-b border-border last:border-0">
+                                <span className="text-sm text-muted-foreground">{item.label}</span>
+                                <span className="text-sm font-semibold text-foreground">{item.value}</span>
                             </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {attendanceData.map((course) => {
-                                    const c = getColor(course.percentage)
-                                    return (
-                                        <div key={course.code}>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-sm">{course.code}</span>
-                                                    <span className="text-sm text-muted-foreground hidden sm:inline">— {course.title}</span>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xs text-muted-foreground">{course.attended} / {course.totalClasses} classes</span>
-                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${c.text}`}>{course.percentage}%</span>
-                                                </div>
-                                            </div>
-                                            <div className="w-full bg-muted rounded-full h-2">
-                                                <div className={`h-2 rounded-full transition-all ${c.bar}`} style={{ width: `${course.percentage}%` }} />
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        )}
+                        ))}
                     </CardContent>
                 </Card>
             </div>
+
+            {attendanceData.length === 0 ? (
+                <div className="text-center py-16 border border-dashed rounded-xl text-muted-foreground">
+                    <p className="font-medium">No attendance records found</p>
+                    <p className="text-sm mt-1">Records will appear once your lecturer marks attendance.</p>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <h2 className="text-xl font-heading font-semibold">Course Breakdown</h2>
+                    {attendanceData.map((course, i) => {
+                        const color = getColor(course.percentage)
+                        return (
+                            <Card key={i}>
+                                <CardContent className="pt-5">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div>
+                                            <p className="font-semibold text-foreground">{course.code}</p>
+                                            <p className="text-sm text-muted-foreground">{course.title}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={`text-2xl font-bold ${color.stroke}`}>{course.percentage}%</p>
+                                            <p className="text-xs text-muted-foreground">{course.attended}/{course.totalClasses} sessions</p>
+                                        </div>
+                                    </div>
+                                    <div className="w-full bg-muted rounded-full h-2">
+                                        <div className={`h-2 rounded-full ${color.bar} transition-all`} style={{ width: `${course.percentage}%` }} />
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        {course.percentage >= 75
+                                            ? <><CheckCircle className="h-4 w-4 text-emerald-500" /><span className="text-xs text-emerald-600 dark:text-emerald-400">Meets requirement</span></>
+                                            : <><XCircle className="h-4 w-4 text-destructive" /><span className="text-xs text-destructive">Below 75% threshold</span></>
+                                        }
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
+                </div>
+            )}
         </div>
     )
 }

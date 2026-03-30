@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, Edit, Trash2, Mail } from 'lucide-react'
+import { Plus, Search, Edit, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PillButton } from '@/components/ui/pill-button'
 import { Input } from '@/components/ui/input'
@@ -28,20 +28,12 @@ export default function UsersPage() {
     const loadUsers = async () => {
         try {
             const res = await apiFetch('/users')
-            if (res.isMock) {
-                setUsers([
-                    { _id: '1', name: 'John Smith', firstName: 'John', lastName: 'Smith', email: 'john.smith@school.edu', role: 'teacher', createdAt: '2024-01-15', status: 'active' },
-                    { _id: '2', name: 'Sarah Johnson', firstName: 'Sarah', lastName: 'Johnson', email: 'sarah.johnson@school.edu', role: 'parent', createdAt: '2024-01-18', status: 'active' },
-                    { _id: '3', name: 'Michael Brown', firstName: 'Michael', lastName: 'Brown', email: 'michael.brown@school.edu', role: 'student', createdAt: '2024-01-20', status: 'active' },
-                ])
-            } else {
-                setUsers(res.data.data.map((u: any) => ({
-                    _id: u._id, name: `${u.firstName} ${u.lastName}`,
-                    firstName: u.firstName, lastName: u.lastName,
-                    email: u.email || u.username, role: u.role,
-                    createdAt: new Date(u.createdAt).toLocaleDateString(), status: 'active'
-                })))
-            }
+            setUsers(res.data.data.map((u: any) => ({
+                _id: u._id, name: `${u.firstName} ${u.lastName}`,
+                firstName: u.firstName, lastName: u.lastName,
+                email: u.email || u.username, role: u.role,
+                createdAt: new Date(u.createdAt).toLocaleDateString(), status: 'active'
+            })))
         } catch { toast.error('Failed to load users') }
     }
 
@@ -59,17 +51,17 @@ export default function UsersPage() {
             teacher: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400',
             parent: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400',
             student: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400',
-            registry: 'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-500/10 dark:text-pink-400',
+            registry: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400',
         }
-        return styles[role] || styles.admin
+        return <span className={`text-xs px-2.5 py-1 rounded-full border font-medium capitalize ${styles[role] || 'bg-muted text-muted-foreground'}`}>{role}</span>
     }
 
-    const handleCreateUser = async () => {
-        if (!newUser.firstName || !newUser.email) { toast.error('Please fill in all required fields'); return }
+    const handleCreate = async () => {
+        if (!newUser.firstName || !newUser.lastName || !newUser.email) { toast.error('Please fill in all fields'); return }
         setIsSubmitting(true)
         try {
-            await apiFetch('/users', { method: 'POST', body: JSON.stringify({ username: newUser.email, password: 'TempPass123!', role: newUser.role, firstName: newUser.firstName, lastName: newUser.lastName, email: newUser.email }) })
-            toast.success(`User ${newUser.firstName} ${newUser.lastName} created! Temp password: TempPass123!`)
+            await apiFetch('/users', { method: 'POST', body: JSON.stringify({ username: newUser.email, password: 'TempPass123!', firstName: newUser.firstName, lastName: newUser.lastName, email: newUser.email, role: newUser.role }) })
+            toast.success(`User created. Temp password: TempPass123!`)
             setIsCreateOpen(false)
             setNewUser({ firstName: '', lastName: '', email: '', role: 'parent' })
             loadUsers()
@@ -77,144 +69,145 @@ export default function UsersPage() {
         finally { setIsSubmitting(false) }
     }
 
-    const openEdit = (u: User) => {
-        setEditingUser(u)
-        setEditForm({ firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role })
-    }
-
-    const handleSaveEdit = async () => {
-        if (!editingUser) return; setIsSubmitting(true)
+    const handleEdit = async () => {
+        if (!editingUser) return
+        setIsSubmitting(true)
         try {
-            await apiFetch(`/users/${editingUser._id}`, { method: 'PUT', body: JSON.stringify({ firstName: editForm.firstName, lastName: editForm.lastName, email: editForm.email }) })
-            toast.success('User updated successfully')
-            setEditingUser(null); loadUsers()
-        } catch (err: any) { toast.error(err.message || 'Update failed') }
+            await apiFetch(`/users/${editingUser._id}`, { method: 'PUT', body: JSON.stringify({ firstName: editForm.firstName, lastName: editForm.lastName, role: editForm.role }) })
+            toast.success('User updated')
+            setEditingUser(null)
+            loadUsers()
+        } catch (err: any) { toast.error(err.message || 'Failed to update user') }
         finally { setIsSubmitting(false) }
     }
 
-    const handleDeleteUser = async (u: User) => {
-        if (!confirm(`Delete ${u.name}? This cannot be undone.`)) return
+    const handleDelete = async (id: string) => {
+        if (!confirm('Delete this user? This cannot be undone.')) return
         try {
-            await apiFetch(`/users/${u._id}`, { method: 'DELETE' })
-            toast.success('User deleted'); loadUsers()
-        } catch (err: any) { toast.error(err.message || 'Delete failed') }
+            await apiFetch(`/users/${id}`, { method: 'DELETE' })
+            toast.success('User deleted')
+            setUsers(prev => prev.filter(u => u._id !== id))
+        } catch { toast.error('Failed to delete user') }
     }
+
+    const openEdit = (u: User) => { setEditingUser(u); setEditForm({ firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role }) }
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
-                <div><h1 className="text-4xl font-heading font-bold text-foreground mb-2">User Management</h1><p className="text-muted-foreground">Add, edit, and manage all user accounts</p></div>
-                <PillButton size="lg" onClick={() => setIsCreateOpen(true)}><Plus className="h-5 w-5 mr-2" />Add New User</PillButton>
+            <div className="flex items-start justify-between">
+                <div>
+                    <h1 className="text-4xl font-heading font-bold text-foreground mb-2">User Management</h1>
+                    <p className="text-muted-foreground">Manage all system user accounts</p>
+                </div>
+                <PillButton onClick={() => setIsCreateOpen(true)}><Plus className="h-4 w-4 mr-2" />Add User</PillButton>
             </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {['all', 'admin', 'teacher', 'parent', 'student'].map(role => (
+                    <button key={role} onClick={() => setSelectedRole(role)} className={`p-3 rounded-xl border text-center transition-all ${selectedRole === role ? 'border-primary bg-primary/5 text-primary font-semibold' : 'border-border hover:bg-muted/50'}`}>
+                        <p className="text-sm font-medium capitalize">{role === 'all' ? 'All Users' : role + 's'}</p>
+                        <p className="text-2xl font-bold mt-1">
+                            {role === 'all' ? users.length : users.filter(u => u.role === role).length}
+                        </p>
+                    </button>
+                ))}
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search by name or email..." className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Joined</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredUsers.length === 0 ? (
+                                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No users found.</TableCell></TableRow>
+                            ) : filteredUsers.map(u => (
+                                <TableRow key={u._id}>
+                                    <TableCell className="font-medium">{u.name}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                                    <TableCell>{getRoleBadge(u.role)}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{u.createdAt}</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <PillButton variant="ghost" size="sm" onClick={() => openEdit(u)}><Edit className="h-4 w-4" /></PillButton>
+                                            <PillButton variant="ghost" size="sm" onClick={() => handleDelete(u._id)}><Trash2 className="h-4 w-4 text-destructive" /></PillButton>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
 
             {/* Create Dialog */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogContent>
-                    <DialogHeader><DialogTitle>Create New User</DialogTitle><DialogDescription>Add a new user to the system. Default password: TempPass123!</DialogDescription></DialogHeader>
-                    <div className="space-y-4">
+                    <DialogHeader><DialogTitle>Add New User</DialogTitle><DialogDescription>Create a new system account. Default password: TempPass123!</DialogDescription></DialogHeader>
+                    <div className="space-y-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <div><Label>First Name</Label><Input placeholder="John" value={newUser.firstName} onChange={e => setNewUser({ ...newUser, firstName: e.target.value })} /></div>
-                            <div><Label>Last Name</Label><Input placeholder="Doe" value={newUser.lastName} onChange={e => setNewUser({ ...newUser, lastName: e.target.value })} /></div>
+                            <div className="space-y-2"><Label>First Name</Label><Input value={newUser.firstName} onChange={e => setNewUser(p => ({ ...p, firstName: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Last Name</Label><Input value={newUser.lastName} onChange={e => setNewUser(p => ({ ...p, lastName: e.target.value }))} /></div>
                         </div>
-                        <div><Label>Email Address</Label><Input type="email" placeholder="john@school.edu" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} /></div>
-                        <div><Label>Role</Label>
-                            <Select value={newUser.role} onValueChange={v => setNewUser({ ...newUser, role: v })}>
+                        <div className="space-y-2"><Label>Email Address</Label><Input type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} /></div>
+                        <div className="space-y-2">
+                            <Label>Role</Label>
+                            <Select value={newUser.role} onValueChange={v => setNewUser(p => ({ ...p, role: v }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="admin">Administrator</SelectItem>
-                                    <SelectItem value="registry">Registry</SelectItem>
-                                    <SelectItem value="teacher">Teacher</SelectItem>
-                                    <SelectItem value="parent">Parent</SelectItem>
-                                    <SelectItem value="student">Student</SelectItem>
+                                    {['admin', 'registry', 'teacher', 'parent', 'student'].map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
                     <DialogFooter>
                         <PillButton variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</PillButton>
-                        <PillButton onClick={handleCreateUser} disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Create User'}</PillButton>
+                        <PillButton onClick={handleCreate} disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Create User'}</PillButton>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             {/* Edit Dialog */}
-            <Dialog open={!!editingUser} onOpenChange={open => !open && setEditingUser(null)}>
+            <Dialog open={!!editingUser} onOpenChange={v => !v && setEditingUser(null)}>
                 <DialogContent>
-                    <DialogHeader><DialogTitle>Edit User</DialogTitle><DialogDescription>Updating {editingUser?.name}</DialogDescription></DialogHeader>
-                    <div className="space-y-4">
+                    <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <div><Label>First Name</Label><Input value={editForm.firstName} onChange={e => setEditForm({ ...editForm, firstName: e.target.value })} /></div>
-                            <div><Label>Last Name</Label><Input value={editForm.lastName} onChange={e => setEditForm({ ...editForm, lastName: e.target.value })} /></div>
+                            <div className="space-y-2"><Label>First Name</Label><Input value={editForm.firstName} onChange={e => setEditForm(p => ({ ...p, firstName: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Last Name</Label><Input value={editForm.lastName} onChange={e => setEditForm(p => ({ ...p, lastName: e.target.value }))} /></div>
                         </div>
-                        <div><Label>Email Address</Label><Input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
-                        <div><Label>Role</Label>
-                            <p className="text-sm text-muted-foreground mt-1 p-2 bg-muted rounded-md">Role: <strong>{editForm.role}</strong> — role changes require re-registration for security.</p>
+                        <div className="space-y-2"><Label>Email</Label><Input value={editForm.email} disabled /></div>
+                        <div className="space-y-2">
+                            <Label>Role</Label>
+                            <Select value={editForm.role} onValueChange={v => setEditForm(p => ({ ...p, role: v }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {['admin', 'registry', 'teacher', 'parent', 'student'].map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                     <DialogFooter>
                         <PillButton variant="outline" onClick={() => setEditingUser(null)}>Cancel</PillButton>
-                        <PillButton onClick={handleSaveEdit} disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Changes'}</PillButton>
+                        <PillButton onClick={handleEdit} disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Changes'}</PillButton>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Filters */}
-            <Card>
-                <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative"><Search className="absolute left-4 top-3 h-5 w-5 text-muted-foreground pointer-events-none" /><Input placeholder="Search by name or email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" /></div>
-                        <Select value={selectedRole} onValueChange={setSelectedRole}>
-                            <SelectTrigger className="w-full md:w-40"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Roles</SelectItem>
-                                <SelectItem value="admin">Administrator</SelectItem>
-                                <SelectItem value="registry">Registry</SelectItem>
-                                <SelectItem value="teacher">Teacher</SelectItem>
-                                <SelectItem value="parent">Parent</SelectItem>
-                                <SelectItem value="student">Student</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Table */}
-            <Card>
-                <CardHeader><CardTitle>All Users</CardTitle><CardDescription>Total: {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</CardDescription></CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Joined</TableHead><TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredUsers.map(u => (
-                                    <TableRow key={u._id}>
-                                        <TableCell className="font-medium">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{u.name.charAt(0)}</div>
-                                                {u.name}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell><div className="flex items-center gap-2 text-muted-foreground"><Mail className="h-4 w-4" />{u.email}</div></TableCell>
-                                        <TableCell><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getRoleBadge(u.role)}`}>{u.role.charAt(0).toUpperCase() + u.role.slice(1)}</span></TableCell>
-                                        <TableCell>{u.createdAt}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <PillButton size="icon-sm" variant="ghost" onClick={() => openEdit(u)}><Edit className="h-4 w-4" /></PillButton>
-                                                <PillButton size="icon-sm" variant="ghost" onClick={() => handleDeleteUser(u)}><Trash2 className="h-4 w-4 text-destructive" /></PillButton>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {filteredUsers.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No users found.</TableCell></TableRow>}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     )
 }

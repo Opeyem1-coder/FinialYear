@@ -11,16 +11,10 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { apiFetch, isMockMode } from '@/lib/api'
+import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
 
 const INCIDENT_TYPES = ['Late', 'Absent Without Notice', 'Misconduct', 'Disruptive Behaviour', 'Cheating', 'Positive Commendation', 'Other']
-
-const MOCK_RECORDS = [
-    { _id: '1', studentId: { _id: 'S1', firstName: 'Emma', lastName: 'Smith', studentId: 'STU2024001' }, incidentType: 'Late', description: 'Arrived 15 minutes late without notice.', actionTaken: 'Verbal warning issued.', date: new Date(Date.now() - 86400000).toISOString() },
-    { _id: '2', studentId: { _id: 'S2', firstName: 'Liam', lastName: 'Johnson', studentId: 'STU2024002' }, incidentType: 'Positive Commendation', description: 'Outstanding mid-semester project performance.', actionTaken: 'Commendation noted in records.', date: new Date(Date.now() - 172800000).toISOString() },
-]
-
 const SEVERITY: Record<string, string> = {
     'Late': 'bg-amber-100 text-amber-700 border-amber-200',
     'Absent Without Notice': 'bg-orange-100 text-orange-700 border-orange-200',
@@ -37,60 +31,26 @@ export default function TeacherDisciplinePage() {
     const [isLoading, setIsLoading] = useState(true)
     const [isOpen, setIsOpen] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
-    const inMock = isMockMode()
-
-    const [form, setForm] = useState({
-        studentId: '',
-        incidentType: 'Late',
-        description: '',
-        actionTaken: '',
-        date: new Date().toISOString().split('T')[0]
-    })
+    const [form, setForm] = useState({ studentId: '', incidentType: 'Late', description: '', actionTaken: '', date: new Date().toISOString().split('T')[0] })
 
     useEffect(() => { loadData() }, [])
 
     const loadData = async () => {
         setIsLoading(true)
         try {
-            const [discRes, studRes] = await Promise.all([
-                apiFetch('/discipline'),
-                apiFetch('/students')
-            ])
-
-            if (discRes.isMock || inMock) {
-                setRecords(MOCK_RECORDS)
-                setStudents([
-                    { _id: 'S1', firstName: 'Emma', lastName: 'Smith', studentId: 'STU2024001' },
-                    { _id: 'S2', firstName: 'Liam', lastName: 'Johnson', studentId: 'STU2024002' },
-                ])
-            } else {
-                setRecords(discRes.data?.data || [])
-                setStudents(studRes.data?.data || [])
-            }
+            const [discRes, studRes] = await Promise.all([apiFetch('/discipline'), apiFetch('/students')])
+            setRecords(discRes.data?.data || [])
+            setStudents(studRes.data?.data || [])
         } catch { toast.error('Failed to load discipline records') }
         finally { setIsLoading(false) }
     }
 
     const handleSubmit = async () => {
-        if (!form.studentId || !form.description || !form.actionTaken) {
-            toast.error('Please fill in all required fields')
-            return
-        }
-        if (inMock) { toast.warning('Switch to Live API to save records.'); return }
-
+        if (!form.studentId || !form.description || !form.actionTaken) { toast.error('Please fill in all required fields'); return }
         setIsSaving(true)
         try {
-            await apiFetch('/discipline', {
-                method: 'POST',
-                body: JSON.stringify({
-                    studentId: form.studentId,
-                    incidentType: form.incidentType,
-                    description: form.description,
-                    actionTaken: form.actionTaken,
-                    date: form.date
-                })
-            })
-            toast.success('Discipline record logged successfully')
+            await apiFetch('/discipline', { method: 'POST', body: JSON.stringify(form) })
+            toast.success('Discipline record saved')
             setIsOpen(false)
             setForm({ studentId: '', incidentType: 'Late', description: '', actionTaken: '', date: new Date().toISOString().split('T')[0] })
             loadData()
@@ -103,124 +63,112 @@ export default function TeacherDisciplinePage() {
         try {
             await apiFetch(`/discipline/${id}`, { method: 'DELETE' })
             toast.success('Record deleted')
-            loadData()
+            setRecords(prev => prev.filter(r => r._id !== id))
         } catch { toast.error('Failed to delete record') }
     }
 
+    if (isLoading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Loading discipline records...</div>
+
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-4xl font-heading font-bold text-foreground mb-2">Discipline Log</h1>
-                    <p className="text-muted-foreground">Record and track student behavioural incidents</p>
+                    <h1 className="text-4xl font-heading font-bold text-foreground mb-2">Discipline</h1>
+                    <p className="text-muted-foreground">File and manage student discipline & commendation records</p>
                 </div>
                 <PillButton onClick={() => setIsOpen(true)}>
-                    <Plus className="h-5 w-5 mr-2" />Log Incident
+                    <Plus className="h-4 w-4 mr-2" />New Record
                 </PillButton>
             </div>
 
-            {/* Log Dialog */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>All Records</CardTitle>
+                    <CardDescription>{records.length} record{records.length !== 1 ? 's' : ''} this semester</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {records.length === 0 ? (
+                        <div className="text-center py-12 text-muted-foreground">
+                            <AlertCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">No discipline records</p>
+                            <p className="text-sm mt-1">File a record using the button above.</p>
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Student</TableHead>
+                                    <TableHead>Incident</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {records.map((r: any) => (
+                                    <TableRow key={r._id}>
+                                        <TableCell className="font-medium">
+                                            {r.studentId?.firstName} {r.studentId?.lastName}
+                                            <p className="text-xs text-muted-foreground">{r.studentId?.studentId}</p>
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className={`text-xs px-2 py-1 rounded-full border font-medium ${SEVERITY[r.incidentType] || SEVERITY['Other']}`}>{r.incidentType}</span>
+                                        </TableCell>
+                                        <TableCell className="max-w-xs text-sm text-muted-foreground truncate">{r.description}</TableCell>
+                                        <TableCell className="text-sm">{new Date(r.date || r.createdAt).toLocaleDateString()}</TableCell>
+                                        <TableCell>
+                                            <PillButton variant="ghost" size="sm" onClick={() => handleDelete(r._id)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </PillButton>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
+
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Log Discipline Incident</DialogTitle>
-                        <DialogDescription>Record a behavioural incident or positive commendation for a student.</DialogDescription>
+                        <DialogTitle>File Discipline Record</DialogTitle>
+                        <DialogDescription>Record an incident or commendation for a student.</DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2">
-                                <Label>Student</Label>
-                                <Select value={form.studentId} onValueChange={v => setForm({ ...form, studentId: v })}>
-                                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select student..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {students.map(s => (
-                                            <SelectItem key={s._id} value={s._id}>
-                                                {s.firstName} {s.lastName} ({s.studentId})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Incident Type</Label>
-                                <Select value={form.incidentType} onValueChange={v => setForm({ ...form, incidentType: v })}>
-                                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {INCIDENT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Date</Label>
-                                <Input type="date" className="mt-1" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-                            </div>
-                            <div className="col-span-2">
-                                <Label>Description</Label>
-                                <Textarea className="mt-1" placeholder="Describe the incident in detail..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-                            </div>
-                            <div className="col-span-2">
-                                <Label>Action Taken</Label>
-                                <Textarea className="mt-1" placeholder="What action was taken or recommended..." value={form.actionTaken} onChange={e => setForm({ ...form, actionTaken: e.target.value })} />
-                            </div>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Student</Label>
+                            <Select value={form.studentId} onValueChange={v => setForm(f => ({ ...f, studentId: v }))}>
+                                <SelectTrigger><SelectValue placeholder="Select student..." /></SelectTrigger>
+                                <SelectContent>{students.map(s => <SelectItem key={s._id} value={s._id}>{s.firstName} {s.lastName} ({s.studentId})</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Incident Type</Label>
+                            <Select value={form.incidentType} onValueChange={v => setForm(f => ({ ...f, incidentType: v }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>{INCIDENT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Date</Label>
+                            <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Description <span className="text-destructive">*</span></Label>
+                            <Textarea placeholder="Describe the incident..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Action Taken <span className="text-destructive">*</span></Label>
+                            <Textarea placeholder="What action was taken?" value={form.actionTaken} onChange={e => setForm(f => ({ ...f, actionTaken: e.target.value }))} rows={2} />
                         </div>
                     </div>
                     <DialogFooter>
                         <PillButton variant="outline" onClick={() => setIsOpen(false)}>Cancel</PillButton>
-                        <PillButton onClick={handleSubmit} disabled={isSaving}>
-                            {isSaving ? 'Saving...' : 'Log Incident'}
-                        </PillButton>
+                        <PillButton onClick={handleSubmit} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Record'}</PillButton>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card><CardHeader className="pb-3"><CardDescription>Total Records</CardDescription></CardHeader><CardContent><div className="text-3xl font-bold">{records.length}</div></CardContent></Card>
-                <Card><CardHeader className="pb-3"><CardDescription>This Month</CardDescription></CardHeader><CardContent><div className="text-3xl font-bold text-amber-600">{records.filter(r => new Date(r.date || r.createdAt).getMonth() === new Date().getMonth()).length}</div></CardContent></Card>
-                <Card><CardHeader className="pb-3"><CardDescription>Commendations</CardDescription></CardHeader><CardContent><div className="text-3xl font-bold text-emerald-500">{records.filter(r => r.incidentType === 'Positive Commendation').length}</div></CardContent></Card>
-                <Card><CardHeader className="pb-3"><CardDescription>Students Involved</CardDescription></CardHeader><CardContent><div className="text-3xl font-bold text-blue-600">{new Set(records.map(r => r.studentId?._id || r.studentId)).size}</div></CardContent></Card>
-            </div>
-
-            {/* Table */}
-            <Card>
-                <CardHeader><CardTitle>All Records</CardTitle><CardDescription>{records.length} total incident{records.length !== 1 ? 's' : ''}</CardDescription></CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow><TableHead>Student</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead>Action Taken</TableHead><TableHead>Date</TableHead><TableHead>Actions</TableHead></TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading records...</TableCell></TableRow>
-                                ) : records.length > 0 ? records.map(r => (
-                                    <TableRow key={r._id}>
-                                        <TableCell>
-                                            <div className="font-medium">{r.studentId?.firstName} {r.studentId?.lastName}</div>
-                                            <div className="text-xs text-muted-foreground">{r.studentId?.studentId}</div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${SEVERITY[r.incidentType] || SEVERITY['Other']}`}>
-                                                <AlertCircle className="h-3 w-3 mr-1" />{r.incidentType}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="max-w-xs"><p className="text-sm truncate">{r.description}</p></TableCell>
-                                        <TableCell className="max-w-xs"><p className="text-sm text-muted-foreground truncate">{r.actionTaken}</p></TableCell>
-                                        <TableCell className="text-sm whitespace-nowrap">{new Date(r.date || r.createdAt).toLocaleDateString()}</TableCell>
-                                        <TableCell>
-                                            <button onClick={() => handleDelete(r._id)} className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors">
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </TableCell>
-                                    </TableRow>
-                                )) : (
-                                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No discipline records yet. Click "Log Incident" to add one.</TableCell></TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     )
 }

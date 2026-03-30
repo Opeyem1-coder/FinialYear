@@ -85,7 +85,7 @@ router.use(protect);
 // Parents can view grades but teachers/admins manage them
 router
     .route('/')
-    .get(authorize('admin', 'teacher', 'parent', 'registry'), getGrades)
+    .get(authorize('admin', 'teacher', 'parent', 'registry', 'student'), getGrades)
     .post(authorize('admin', 'teacher'), createGrade);
 
 /**
@@ -157,7 +157,7 @@ router
  */
 router
     .route('/:id')
-    .get(authorize('admin', 'teacher', 'parent'), getGrade)
+    .get(authorize('admin', 'teacher', 'parent', 'student'), getGrade)
     .put(authorize('admin', 'teacher'), updateGrade)
     .delete(authorize('admin', 'teacher'), deleteGrade);
 

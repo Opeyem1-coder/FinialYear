@@ -1,40 +1,44 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/lib/api'
-import { BookOpen, Users, Calendar, BarChart2, ClipboardList } from 'lucide-react'
+import { BookOpen, Users, BarChart2, ClipboardList } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PillButton } from '@/components/ui/pill-button'
 import { Badge } from '@/components/ui/badge'
-
-interface Class { id: string; name: string; subject: string; teacher: string; color: string }
+import { toast } from 'sonner'
 
 export default function TeacherClassesPage() {
     const router = useRouter()
-    const [classes, setClasses] = useState<Class[]>([])
+    const [classes, setClasses] = useState<any[]>([])
+    const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
-        const loadCourses = async () => {
+        const load = async () => {
             try {
                 const res = await apiFetch('/courses')
-                if (res.isMock) {
-                    setClasses([
-                        { id: 'math', name: 'CSC 301 — Data Structures', subject: 'Computer Science', teacher: 'Dr. Smith', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
-                        { id: 'science', name: 'CSC 305 — Operating Systems', subject: 'Computer Science', teacher: 'Dr. Smith', color: 'bg-emerald-100 dark:bg-emerald-500/30 text-emerald-500 dark:text-emerald-400' },
-                        { id: 'english', name: 'MTH 201 — Linear Algebra', subject: 'Mathematics', teacher: 'Dr. Smith', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' },
-                    ])
-                } else {
-                    const colors = ['bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400', 'bg-emerald-100 dark:bg-emerald-500/30 text-emerald-500 dark:text-emerald-400', 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400', 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400']
-                    setClasses(res.data.data.map((c: any, idx: number) => ({
-                        id: c._id, name: c.courseName, subject: c.subject,
-                        teacher: c.teacherId ? `${c.teacherId.firstName} ${c.teacherId.lastName}` : 'Unassigned',
-                        color: colors[idx % colors.length]
-                    })))
-                }
-            } catch (err) { console.error('Failed to load classes', err) }
+                const colors = [
+                    'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+                    'bg-emerald-100 dark:bg-emerald-500/30 text-emerald-500 dark:text-emerald-400',
+                    'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+                    'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+                ]
+                setClasses((res.data?.data || []).map((c: any, idx: number) => ({
+                    id: c._id, name: c.courseName, subject: c.subject,
+                    teacher: c.teacherId ? `${c.teacherId.firstName} ${c.teacherId.lastName}` : 'Unassigned',
+                    color: colors[idx % colors.length]
+                })))
+            } catch (err: any) {
+                toast.error('Failed to load classes')
+            } finally {
+                setIsLoading(false)
+            }
         }
-        loadCourses()
+        load()
     }, [])
+
+    if (isLoading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Loading classes...</div>
 
     return (
         <div className="space-y-8">
@@ -55,10 +59,6 @@ export default function TeacherClassesPage() {
                             <CardDescription>{cls.teacher}</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 gap-2 text-center">
-                                <div className="p-2 rounded bg-muted/50"><p className="text-xs text-muted-foreground">Avg Grade</p><p className="text-lg font-bold text-foreground">—</p></div>
-                                <div className="p-2 rounded bg-muted/50"><p className="text-xs text-muted-foreground">Attendance</p><p className="text-lg font-bold text-foreground">—</p></div>
-                            </div>
                             <div className="grid grid-cols-2 gap-2 pt-2">
                                 <PillButton variant="outline" size="sm" fullWidth onClick={() => router.push(`/teacher/grades?courseId=${cls.id}`)}>
                                     <BarChart2 className="h-4 w-4 mr-1" />Grades
@@ -71,24 +71,13 @@ export default function TeacherClassesPage() {
                     </Card>
                 ))}
                 {classes.length === 0 && (
-                    <div className="col-span-3 text-center py-16 text-muted-foreground">
+                    <div className="col-span-3 text-center py-16 text-muted-foreground border border-dashed rounded-xl">
                         <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-30" />
                         <p className="text-lg font-medium">No classes assigned yet</p>
                         <p className="text-sm mt-1">Ask an admin to create and assign courses to you.</p>
                     </div>
                 )}
             </div>
-
-            <Card>
-                <CardHeader><CardTitle>Summary</CardTitle><CardDescription>Your teaching load at a glance</CardDescription></CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="p-4 rounded-lg border border-border text-center"><p className="text-3xl font-bold text-primary mb-1">{classes.length}</p><p className="text-sm text-muted-foreground">Courses Teaching</p></div>
-                        <div className="p-4 rounded-lg border border-border text-center"><p className="text-3xl font-bold text-secondary mb-1">—</p><p className="text-sm text-muted-foreground">Total Students</p></div>
-                        <div className="p-4 rounded-lg border border-border text-center"><p className="text-3xl font-bold text-emerald-500 mb-1">—</p><p className="text-sm text-muted-foreground">Pending Grades</p></div>
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     )
 }

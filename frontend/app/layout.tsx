@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans, Urbanist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { DataToggle } from '@/components/ui/data-toggle'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
@@ -39,7 +38,6 @@ export default function RootLayout({
     <html lang="en" className={`${jakarta.variable} ${urbanist.variable}`}>
       <body className="font-sans antialiased bg-background text-foreground">
         {children}
-        <DataToggle />
         <Toaster richColors position="top-right" />
         <Analytics />
       </body>
