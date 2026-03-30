@@ -43,27 +43,54 @@ export default function RegistryStudentsPage() {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formData.firstName || !formData.lastName || !formData.email) { toast.error('Please fill in all required fields'); return }
+        if (!formData.firstName || !formData.lastName || !formData.email) { 
+            toast.error('Please fill in all required fields'); 
+            return 
+        }
+        
         setIsSubmitting(true)
         try {
-            // Create user account
+            // 1. Create user account
             const userRes = await apiFetch('/users', {
                 method: 'POST',
-                body: JSON.stringify({ username: formData.email, password: 'TempPass123!', role: 'student', firstName: formData.firstName, lastName: formData.lastName, email: formData.email })
+                body: JSON.stringify({ 
+                    username: formData.email, 
+                    password: 'TempPass123!', 
+                    role: 'student', 
+                    firstName: formData.firstName, 
+                    lastName: formData.lastName, 
+                    email: formData.email 
+                })
             })
+            
             const newUserId = userRes.data?.data?._id || userRes.data?._id
 
-            // Create student profile linked to user
+            // 2. Generate a random student ID (e.g., STU-4928)
+            const generatedStudentId = `STU-${Math.floor(1000 + Math.random() * 9000)}`
+
+            // 3. Create student profile linked to user (Now including studentId)
             await apiFetch('/students', {
                 method: 'POST',
-                body: JSON.stringify({ userId: newUserId, firstName: formData.firstName, lastName: formData.lastName, program: formData.program, level: formData.level, dateOfBirth: formData.dateOfBirth })
+                body: JSON.stringify({ 
+                    studentId: generatedStudentId, // <-- Added here!
+                    userId: newUserId, 
+                    firstName: formData.firstName, 
+                    lastName: formData.lastName, 
+                    program: formData.program, 
+                    level: formData.level, 
+                    dateOfBirth: formData.dateOfBirth 
+                })
             })
+            
             toast.success(`${formData.firstName} ${formData.lastName} registered! Temp password: TempPass123!`)
             setIsRegistering(false)
             setFormData({ firstName: '', lastName: '', email: '', dateOfBirth: '', program: 'Computer Science', level: '100 Level' })
             loadStudents()
-        } catch (err: any) { toast.error(err.message || 'Registration failed') }
-        finally { setIsSubmitting(false) }
+        } catch (err: any) { 
+            toast.error(err.message || 'Registration failed') 
+        } finally { 
+            setIsSubmitting(false) 
+        }
     }
 
     const openEdit = (s: Student) => { setEditingStudent(s); setEditForm({ program: s.program, level: s.level }) }
